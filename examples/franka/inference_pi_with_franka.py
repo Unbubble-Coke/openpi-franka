@@ -68,7 +68,7 @@ def apply_delta_rotation(current_euler: np.ndarray, delta_euler: np.ndarray) -> 
     delta_rot = euler_to_rotation_matrix(delta_euler)
     
     # Apply delta rotation in local frame: R_new = R_current @ R_delta
-    new_rot = current_rot @ delta_rot
+    new_rot = delta_rot @ current_rot
     
     # Convert back to Euler angles
     new_euler = rotation_matrix_to_euler(new_rot)
