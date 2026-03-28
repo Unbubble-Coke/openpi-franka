@@ -289,8 +289,10 @@ class Inference:
             gripper_position = 0.0 if gripper_state  < self.close_threshold else 1.0
             obs["gripper_position"] = gripper_position
         
-        # return self._transfer_obs_state(obs) 
-        return self._transfer_obs_delta_ee_state(obs)        
+        if self.action_mode == "joint":
+            return self._transfer_obs_state(obs)
+        else:
+            return self._transfer_obs_delta_ee_state(obs)        
 
     # --------------------------- ACTION EXECUTION --------------------------- #
     def execute_actions(self, actions: np.ndarray, block: bool = False):
@@ -299,9 +301,19 @@ class Inference:
             logging.error("[ERROR] Robot controller not connected. Cannot execute actions.")
             return
         
+        # Check action dimensions
+        action_dim = actions.shape[-1] if len(actions.shape) > 1 else len(actions)
+        logging.info(f"[DEBUG] Action shape: {actions.shape}, action_mode: {self.action_mode}")
+        
         if self.action_mode == "delta_ee":
+            if action_dim != 7:
+                logging.error(f"[ERROR] Expected 7D action for delta_ee mode, got {action_dim}D")
+                return
             self._execute_delta_ee_actions(actions, block)
         else:
+            if action_dim != 8:
+                logging.error(f"[ERROR] Expected 8D action for joint mode, got {action_dim}D")
+                return
             self._execute_joint_actions(actions, block)
 
     def _execute_joint_actions(self, actions: np.ndarray, block: bool = False):
@@ -323,7 +335,7 @@ class Inference:
                 gripper_command = 0 if action[7] < self.close_threshold else 1
                 if self.gripper_reverse:
                     gripper_command = 1 - gripper_command
-                self.robot_client.gripper_goto(width=gripper_command*0.0801, speed=self.gripper_speed, force=self.gripper_force, epsilon_inner=0.0801, epsilon_outer=0.0801)
+                self.robot_client.gripper_goto(width=gripper_command*0.085, speed=self.gripper_speed, force=self.gripper_force, epsilon_inner=0.0801, epsilon_outer=0.0801)
                 elapsed = time.perf_counter() - start_time
                 to_sleep = 1.0 / self.action_fps - elapsed
                 if to_sleep > 0:
@@ -399,6 +411,7 @@ class Inference:
         self.connect_cameras()
         # self.execute_actions(self.initial_pose, block=True) # move to initial pose
         self.robot_client.robot_move_to_joint_positions(positions=self.initial_pose, time_to_go=5.0)
+        self.robot_client.gripper_goto(width=0.085, speed=self.gripper_speed, force=self.gripper_force, epsilon_inner=0.0801, epsilon_outer=0.0801)
         
         # Start appropriate control mode based on action_mode
         if self.action_mode == "delta_ee":
@@ -430,15 +443,21 @@ class Inference:
                 infer_time += 1
         except KeyboardInterrupt:
             logging.info("[INFO] KeyboardInterrupt detec ted. Saving recorded videos before exiting...")
+            self.robot_client.robot_move_to_joint_positions(positions=self.initial_pose, time_to_go=5.0)
+            self.robot_client.gripper_goto(width=0.085, speed=self.gripper_speed, force=self.gripper_force, epsilon_inner=0.0801, epsilon_outer=0.0801)
+        
 
         except Exception as e:
             logging.error(f"[ERROR] Inference loop encountered an error: {e}")
+            self.robot_client.robot_move_to_joint_positions(positions=self.initial_pose, time_to_go=5.0)
+            self.robot_client.gripper_goto(width=0.085, speed=self.gripper_speed, force=self.gripper_force, epsilon_inner=0.0801, epsilon_outer=0.0801)
 
         try:
             ans = input("Save recorded videos before exiting? [Y/n]: ").strip().lower()
             if ans in ("", "y", "yes"):
                 logging.info("[INFO] Saving recorded videos before exiting...")
                 self.recorder.save_video()
+                
         except Exception as e:
             logging.error(f"[ERROR] Failed to save videos: {e}")
 
