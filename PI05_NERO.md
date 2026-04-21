@@ -327,3 +327,87 @@ tosutil cp -r -p 40 -j 50 -nfj 40 tos://c20250510/shenzhaolong/datasets/model/pi
 ```
 
 tosutil cp -r -p 40 -j 50 -nfj 40 tos://c20250510/shenzhaolong/flash_attn-2.7.4.post1+cu12torch2.6cxx11abiFALSE-cp310-cp310-linux_x86_64.whl /vepfs-mlp2/c20250510/250303034/workspace/starVLA
+
+## NERO Dual-Arm Recommended Training Schema
+
+This section summarizes the recommended sample structure for the NERO dual-arm robot.
+
+### 1. Recommended training sample structure
+
+#### A. Proprio state
+
+Use a 14D proprioceptive state composed of:
+
+- `left_ee_pose`: 6D
+    - `x`, `y`, `z`
+    - `rz`, `ry`, `rx`
+- `right_ee_pose`: 6D
+    - `x`, `y`, `z`
+    - `rz`, `ry`, `rx`
+- `left_gripper_cmd_bin`: 1D continuous scalar
+- `right_gripper_cmd_bin`: 1D continuous scalar
+
+Notes:
+
+- The current code order is `x, y, z, rz, ry, rx` for each arm.
+- The field name contains `cmd_bin`, but the actual value path is continuous, not strictly binary.
+
+#### B. Action
+
+Use a 14D control vector composed of:
+
+- `left_delta_ee_pose`: 6D Cartesian delta
+    - `x`, `y`, `z`, `rx`, `ry`, `rz`
+- `right_delta_ee_pose`: 6D Cartesian delta
+    - `x`, `y`, `z`, `rx`, `ry`, `rz`
+- `left_gripper_cmd_bin`: 1D continuous scalar
+- `right_gripper_cmd_bin`: 1D continuous scalar
+
+If grippers are not used, the action dimension can be reduced to 12.
+
+### 2. Key semantic notes
+
+| Item | Conclusion |
+| --- | --- |
+| Action semantics | End-effector delta control, not absolute joint position |
+| Control frequency | 50 Hz |
+| Joint space | Not used as the main input/output path in the current training interface |
+| Gripper semantics | Named `cmd_bin`, but the actual path is continuous |
+| Gripper threshold | `close_threshold = 0.05` only applies in binary mode |
+| Gripper max open | `gripper_max_open = 0.1` m |
+| Gripper reverse | Default `False` |
+
+### 3. Camera fields
+
+The camera list is not hardcoded. It comes from `config.cameras`, so the dataset should keep camera names configurable instead of baking in fixed base/wrist names.
+
+Typical documented camera setup:
+
+- `left_wrist_cam_serial`
+- `right_wrist_cam_serial`
+- `head_cam_serial`
+
+All images should be stored as RGB with 3 channels.
+
+### 4. Recommended LeRobot schema
+
+#### Observation
+
+- `proprio`: 14D
+- `image`: configurable multi-camera dictionary, each image in `H × W × 3`
+
+#### Action
+
+- 14D continuous control
+- 12D dual-arm end-effector delta
+- 2D gripper continuous command
+
+### 5. Practical mapping for the current openpi pipeline
+
+For the current policy pipeline, the safest mapping is:
+
+- `observation/state` → 14D proprio state
+- `observation/image` / wrist image keys → configurable RGB camera inputs
+- `actions` → 14D delta action vector
+
+This makes NERO compatible with the same policy transform pattern used by Franka, ALOHA, and DROID, while preserving the dual-arm Cartesian delta semantics.

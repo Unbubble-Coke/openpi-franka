@@ -22,6 +22,7 @@ import openpi.policies.droid_policy as droid_policy
 import openpi.policies.libero_policy as libero_policy
 import openpi.policies.franka_policy as franka_policy
 import openpi.policies.franka_policy_delta_ee as franka_policy_delta_ee
+import openpi.policies.nero_policy as nero_policy
 import openpi.shared.download as _download
 import openpi.shared.normalize as _normalize
 import openpi.training.droid_rlds_dataset as droid_rlds_dataset
@@ -613,6 +614,72 @@ class LeRobotFrankaDeltaEEDataConfig(DataConfigFactory):
 
 
 @dataclasses.dataclass(frozen=True)
+class LeRobotNeroDataConfig(DataConfigFactory):
+    """Data config for custom NERO dual-arm datasets in LeRobot format."""
+
+    # NERO actions are typically EE deltas with gripper commands, so extra delta transform is off by default.
+    extra_delta_transform: bool = False
+    # Number of action dimensions emitted to the robot. Typical values: 14 (with grippers) or 12 (without grippers).
+    action_dim: int = 14
+    action_sequence_keys: Sequence[str] = ("action",)
+
+    # Source keys in the LeRobot sample.
+    state_source_key: str = "observation.state"
+    base_image_source_key: str = "observation.images.head_image"
+    left_wrist_image_source_key: str = "observation.images.left_wrist_image"
+    right_wrist_image_source_key: str | None = "observation.images.right_wrist_image"
+    actions_source_key: str = "action"
+    prompt_source_key: str = "task"
+
+    @override
+    def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
+        repack_structure: dict[str, str] = {
+            "observation/image": self.base_image_source_key,
+            "observation/wrist_image": self.left_wrist_image_source_key,
+            "observation/state": self.state_source_key,
+            "actions": self.actions_source_key,
+            "prompt": self.prompt_source_key,
+        }
+        if self.right_wrist_image_source_key is not None:
+            repack_structure["observation/right_wrist_image"] = self.right_wrist_image_source_key
+
+        repack_transform = _transforms.Group(inputs=[_transforms.RepackTransform(repack_structure)])
+
+        right_wrist_key = "observation/right_wrist_image" if self.right_wrist_image_source_key is not None else None
+        data_transforms = _transforms.Group(
+            inputs=[
+                nero_policy.NeroInputs(
+                    model_type=model_config.model_type,
+                    state_key="observation/state",
+                    base_image_key="observation/image",
+                    left_wrist_image_key="observation/wrist_image",
+                    right_wrist_image_key=right_wrist_key,
+                    prompt_key="prompt",
+                )
+            ],
+            outputs=[nero_policy.NeroOutputs(action_dim=self.action_dim)],
+        )
+
+        if self.extra_delta_transform:
+            # Apply delta conversion only on the EE dimensions, keeping the last 2 gripper dims absolute.
+            delta_action_mask = _transforms.make_bool_mask(self.action_dim - 2, -2)
+            data_transforms = data_transforms.push(
+                inputs=[_transforms.DeltaActions(delta_action_mask)],
+                outputs=[_transforms.AbsoluteActions(delta_action_mask)],
+            )
+
+        model_transforms = ModelTransformFactory()(model_config)
+
+        return dataclasses.replace(
+            self.create_base_config(assets_dirs, model_config),
+            repack_transforms=repack_transform,
+            data_transforms=data_transforms,
+            model_transforms=model_transforms,
+            action_sequence_keys=self.action_sequence_keys,
+        )
+
+
+@dataclasses.dataclass(frozen=True)
 class TrainConfig:
     # Name of the config. Must be unique. Will be used to reference this config.
     name: tyro.conf.Suppress[str]
@@ -1081,6 +1148,31 @@ _CONFIGS = [
         num_train_steps=20_000,
     ),
     TrainConfig(
+        name="pi05_droid_finetune_nero",
+        model=pi0_config.Pi0Config(
+            pi05=True, 
+            action_horizon=20, 
+            paligemma_variant="gemma_2b_lora", 
+            action_expert_variant="gemma_300m_lora"
+        ),
+        data=LeRobotNeroDataConfig(
+            repo_id="/vepfs-mlp2/c20250510/250303034/workspace/data/robotiq/pick_all_objects_20260208", # Will need user to change this
+            base_config=DataConfig(prompt_from_task=False, action_sequence_keys=("action",)),
+            extra_delta_transform=False,
+            action_dim=14,  # Changed back to 14D (6+6+1+1) to match NERO's schema
+        ),
+        batch_size=64,
+        freeze_filter=pi0_config.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        # Turn off EMA for LoRA finetuning.
+        ema_decay=None,
+        optimizer=_optimizer.AdamW(clip_gradient_norm=1.0),
+        weight_loader=weight_loaders.CheckpointWeightLoader("/vepfs-mlp2/c20250510/250303034/workspace/model/openpi/openpi-assets/checkpoints/pi05_droid/params"),
+        pytorch_weight_path="/path/to/your/pytorch_weight_path",
+        num_train_steps=100_000,
+    ),
+    TrainConfig(
         name="pi05_droid_finetune_franka",
         model=pi0_config.Pi0Config(
             pi05=True, 
@@ -1143,6 +1235,39 @@ _CONFIGS = [
         weight_loader=weight_loaders.CheckpointWeightLoader("/vepfs-mlp2/c20250510/250303034/workspace/model/openpi/openpi-assets/checkpoints/pi05_droid/params"),
         pytorch_weight_path="/path/to/your/pytorch_weight_path",
         num_train_steps=100_000,
+    ),
+    TrainConfig(
+        name="pi0_nero",
+        model=pi0_config.Pi0Config(action_dim=14, action_horizon=10),
+        data=LeRobotNeroDataConfig(
+            # Replace with your NERO LeRobot dataset repo id or local path.
+            repo_id="your_hf_username/my_nero_dataset",
+            assets=AssetsConfig(asset_id="nero"),
+            base_config=DataConfig(prompt_from_task=True, action_sequence_keys=("action",)),
+            action_dim=14,
+            extra_delta_transform=False,
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=30_000,
+        batch_size=32,
+    ),
+    TrainConfig(
+        name="pi05_nero",
+        model=pi0_config.Pi0Config(pi05=True, action_dim=32, action_horizon=16),
+        data=LeRobotNeroDataConfig(
+            # Replace with your NERO LeRobot dataset repo id or local path.
+            repo_id="your_hf_username/my_nero_dataset",
+            assets=AssetsConfig(
+                assets_dir="gs://openpi-assets/checkpoints/pi05_base/assets",
+                asset_id="nero",
+            ),
+            base_config=DataConfig(prompt_from_task=True, action_sequence_keys=("action",)),
+            action_dim=14,
+            extra_delta_transform=False,
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
+        num_train_steps=30_000,
+        batch_size=64,
     ),
     #
     # Debugging configs.

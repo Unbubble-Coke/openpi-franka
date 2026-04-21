@@ -74,7 +74,7 @@ override-dependencies = [
 openpi-client = { workspace = true }
 # lerobot = { git = "https://github.com/huggingface/lerobot", rev = "0cf864870cf29f4738d3ade893e6fd13fbd7cdb5" }
 # lerobot = { git = "https://github.com/huggingface/lerobot", rev = "da5d2f3e9187fa4690e6667fe8b294cae49016d6" }
-lerobot = {path = "/home/deepcybo/lerobot"}
+lerobot = {path = "/home/geist/lerobot"}
 dlimp = { git = "https://github.com/kvablack/dlimp", rev = "ad72ce3a9b414db2185bc0b38461d4101a65477a" }
 
 [tool.uv.workspace]

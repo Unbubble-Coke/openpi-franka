@@ -1,0 +1,28 @@
+dry_run: true
+
+model:
+  # Must exist in src/openpi/training/config.py
+  name: pi05_nero
+  # Replace with your real checkpoint path.
+  checkpoint_dir: /path/to/checkpoint
+
+run:
+  action_fps: 20
+  action_horizon: 10
+  max_steps: 0
+  task_description: pick and place with nero dual-arm
+
+# Camera names are configurable and should match your robot observation image dict keys.
+image:
+  height: 224
+  width: 224
+  base_camera_key: head_image
+  left_wrist_camera_key: left_wrist_image
+  right_wrist_camera_key: right_wrist_image
+
+gripper:
+  # For continuous gripper commands, keep use_binary_mode false.
+  use_binary_mode: false
+  close_threshold: 0.05
+  min_cmd: 0.0
+  max_cmd: 1.0
