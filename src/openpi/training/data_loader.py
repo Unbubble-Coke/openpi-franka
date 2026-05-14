@@ -153,8 +153,8 @@ def create_torch_dataset(
         video_backend=video_backend,
     )
 
-    if data_config.prompt_from_task:
-        dataset = TransformedDataset(dataset, [_transforms.PromptFromLeRobotTask(dataset_meta.tasks)])
+    # if data_config.prompt_from_task:
+    #     dataset = TransformedDataset(dataset, [_transforms.PromptFromLeRobotTask(dataset_meta.tasks)])
 
     # data reorder
     def reorder_state(example, indices):
@@ -174,7 +174,10 @@ def create_torch_dataset(
     dataset.hf_dataset = dataset.hf_dataset.map(lambda ex: reorder_state(ex, indices=indices))
     print("Finished reordering state.")
     if data_config.prompt_from_task:
-        dataset = TransformedDataset(dataset, [_transforms.PromptFromLeRobotTask(dataset_meta.tasks)])
+        tasks_dict = dataset_meta.tasks
+        if hasattr(tasks_dict, "to_dict"):
+            tasks_dict = {v: k for k, v in tasks_dict["task_index"].to_dict().items()}
+        dataset = TransformedDataset(dataset, [_transforms.PromptFromLeRobotTask(tasks_dict)])
     
     return dataset
 

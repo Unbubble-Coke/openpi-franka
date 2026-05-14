@@ -1156,12 +1156,12 @@ _CONFIGS = [
             action_expert_variant="gemma_300m_lora"
         ),
         data=LeRobotNeroDataConfig(
-            repo_id="/home/deepcybo/Workspace_openpi/Openpi_data/2mL_empty_merged_20260424",
+            repo_id="/home/deepcybo/Workspace_openpi/Openpi_data/8mL_empty_left_merged_20260508_E125",
             assets=AssetsConfig(
-                assets_dir="/home/deepcybo/Workspace_openpi/openpi-franka/checkpoints/pi05_droid/assets",
-                asset_id="droid",
+                assets_dir="/home/deepcybo/Workspace_openpi/Openpi_data",
+                asset_id="8mL_empty_left_merged_20260508_E125",
             ),
-            base_config=DataConfig(prompt_from_task=False, action_sequence_keys=("action",)),
+            base_config=DataConfig(prompt_from_task=True, action_sequence_keys=("action",)),
             extra_delta_transform=False,
             action_dim=14,  # Changed back to 14D (6+6+1+1) to match NERO's schema
         ),
@@ -1273,7 +1273,6 @@ _CONFIGS = [
             # Replace with your NERO LeRobot dataset repo id or local path.
             repo_id="your_hf_username/my_nero_dataset",
             assets=AssetsConfig(
-                assets_dir="gs://openpi-assets/checkpoints/pi05_base/assets",
                 asset_id="nero",
             ),
             base_config=DataConfig(prompt_from_task=True, action_sequence_keys=("action",)),
