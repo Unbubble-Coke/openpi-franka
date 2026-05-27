@@ -75,6 +75,12 @@ class NeroDualArmClient:
         """Get right arm EE pose [x, y, z, rx, ry, rz] (m, radians)."""
         if self.server is None:
             return np.zeros(6)
+        return np.array(self.server.right_robot_get_ee_pose())
+    
+    def right_robot_get_ee_pose(self) -> np.ndarray:
+        """Get right arm EE pose [x, y, z, rx, ry, rz] (m, radians)."""
+        if self.server is None:
+            return np.zeros(6)
         # Server returns meters and radians
         return np.array(self.server.right_robot_get_ee_pose())
     
