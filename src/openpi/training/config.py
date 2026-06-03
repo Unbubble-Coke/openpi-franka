@@ -1230,7 +1230,7 @@ _CONFIGS = [
             action_expert_variant="gemma_300m_lora"
         ),
         data=LeRobotNeroDataConfig(
-            repo_id="/home/deepcybo/Workspace_openpi/Openpi_data/2mL_empty_merged_20260424",
+            repo_id="/home/lh912/wbcd_workspace/openpi-franka-data/opc_left_right_merged_E155_1",
             assets=AssetsConfig(
                 assets_dir="/home/deepcybo/Workspace_openpi/openpi-franka/checkpoints/pi05_droid/assets",
                 asset_id="droid",
@@ -1260,7 +1260,7 @@ _CONFIGS = [
         pytorch_weight_path=None,
         num_train_steps=50_000,
     ),
-    
+
     TrainConfig(
         name="pi05_droid_finetune_franka",
         model=pi0_config.Pi0Config(

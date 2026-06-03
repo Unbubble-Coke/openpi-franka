@@ -22,6 +22,7 @@ import openpi.shared.nnx_utils as nnx_utils
 import openpi.training.checkpoints as _checkpoints
 import openpi.training.config as _config
 import openpi.training.data_loader as _data_loader
+import openpi.training.local_metrics as local_metrics
 import openpi.training.optimizer as _optimizer
 import openpi.training.sharding as sharding
 import openpi.training.utils as training_utils
@@ -216,6 +217,7 @@ def main(config: _config.TrainConfig):
         resume=config.resume,
     )
     init_wandb(config, resuming=resuming, enabled=config.wandb_enabled)
+    local_plotter = local_metrics.LocalMetricPlotter(config.checkpoint_dir / "local_metrics")
 
     data_loader = _data_loader.create_data_loader(
         config,
@@ -266,6 +268,7 @@ def main(config: _config.TrainConfig):
             info_str = ", ".join(f"{k}={v:.4f}" for k, v in reduced_info.items())
             pbar.write(f"Step {step}: {info_str}")
             wandb.log(reduced_info, step=step)
+            local_plotter.log(step, reduced_info)
             infos = []
         batch = next(data_iter)
 

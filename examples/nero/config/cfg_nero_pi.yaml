@@ -1,17 +1,36 @@
-dry_run: True
+dry_run: False
 
 model:
   # Must exist in src/openpi/training/config.py
   name: pi05_droid_finetune_nero
   # Local checkpoint root or leaf checkpoint directory.
   # The runtime will auto-resolve the latest saved checkpoint if a parent directory is provided.
-  checkpoint_dir: checkpoints/23000
+  checkpoint_dir: checkpoints/test_run_260602/45000
 
 run:
-  action_fps: 20
-  action_horizon: 10
+  action_fps: 30
+  action_horizon: 30
+  execute_horizon: 15
   max_steps: 0
-  task_description: pick and place with nero dual-arm
+  task_description: open the instrument drawer, place the rack in the correct position, ands then close the instrument drawer
+  state_diag_period_s: 2.0
+
+video:
+  fps: 15
+  visualize: false
+
+action_mode:
+  mode: delta_ee
+  ee_action_scale: 1.0
+  # This checkpoint was trained with a static right arm. Constant action
+  # dimensions are not automatically clamped by policy unnormalization, so
+  # freeze them before sending commands to NERO.
+  freeze_right_arm_action: false
+  freeze_right_gripper_action: false
+  # Per-step safety limits for relative ServoP_OL commands.
+  # Set to 0 to disable a limit after validating the robot behavior.
+  max_delta_pos_norm: 0.05  # meters
+  max_delta_rot_norm: 0.10  # radians
 
 # Camera names are configurable and should match your robot observation image dict keys.
 image:
@@ -21,9 +40,20 @@ image:
   left_wrist_camera_key: left_wrist_image
   right_wrist_camera_key: right_wrist_image
 
+cameras:
+  left_wrist_cam_serial: "412622270929"   # left wrist camera serial number
+  right_wrist_cam_serial: "412622270701"  # right wrist camera serial number
+  exterior_cam_serial: "339322074423"     # head (overhead) camera serial number
+  # left_wrist_cam_serial: "412622270929"   # left wrist camera serial number
+  # right_wrist_cam_serial: "412622270701"  # right wrist camera serial number
+  # head_cam_serial: "339322074423"         # head (overhead) camera serial number
+  width: 424 # 640 424
+  height: 240 # 360 240
+
 gripper:
   # For continuous gripper commands, keep use_binary_mode false.
   use_binary_mode: false
   close_threshold: 0.05
   min_cmd: 0.0
   max_cmd: 1.0
+  command_deadband: 0.0015
