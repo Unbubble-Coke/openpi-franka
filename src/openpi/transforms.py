@@ -136,19 +136,21 @@ class Normalize(DataTransformFn):
 
     def _normalize(self, x, stats: NormStats):
         mean, std = stats.mean[..., : x.shape[-1]], stats.std[..., : x.shape[-1]]
-        # When std is very small (< 1e-4), treat the dimension as constant to avoid numerical explosion
-        # This handles cases where some dimensions (e.g., stationary arm joints) have near-zero variance
-        std_safe = np.where(std < 1e-4, 1.0, std)
-        return (x - mean) / std_safe
+        return (x - mean) / (std + 1e-6)
+        # # When std is very small (< 1e-4), treat the dimension as constant to avoid numerical explosion
+        # # This handles cases where some dimensions (e.g., stationary arm joints) have near-zero variance
+        # std_safe = np.where(std < 1e-4, 1.0, std)
+        # return (x - mean) / std_safe
 
     def _normalize_quantile(self, x, stats: NormStats):
         assert stats.q01 is not None
         assert stats.q99 is not None
         q01, q99 = stats.q01[..., : x.shape[-1]], stats.q99[..., : x.shape[-1]]
-        # When q99 - q01 is very small (< 1e-4), treat the dimension as constant
-        # This handles cases where some dimensions have near-zero range
-        range_safe = np.where(q99 - q01 < 1e-4, 1.0, q99 - q01)
-        return (x - q01) / range_safe * 2.0 - 1.0
+        return (x - q01) / (q99 - q01 + 1e-6) * 2.0 - 1.0
+        # # When q99 - q01 is very small (< 1e-4), treat the dimension as constant
+        # # This handles cases where some dimensions have near-zero range
+        # range_safe = np.where(q99 - q01 < 1e-4, 1.0, q99 - q01)
+        # return (x - q01) / range_safe * 2.0 - 1.0
 
 
 @dataclasses.dataclass(frozen=True)
@@ -176,19 +178,23 @@ class Unnormalize(DataTransformFn):
     def _unnormalize(self, x, stats: NormStats):
         mean = pad_to_dim(stats.mean, x.shape[-1], axis=-1, value=0.0)
         std = pad_to_dim(stats.std, x.shape[-1], axis=-1, value=1.0)
-        # Use the same safe std logic as in _normalize for consistency
-        std_safe = np.where(std < 1e-4, 1.0, std)
-        return x * std_safe + mean
+        return x * (std + 1e-6) + mean
+        # # Use the same safe std logic as in _normalize for consistency
+        # std_safe = np.where(std < 1e-4, 1.0, std)
+        # return x * std_safe + mean
 
     def _unnormalize_quantile(self, x, stats: NormStats):
         assert stats.q01 is not None
         assert stats.q99 is not None
         q01, q99 = stats.q01, stats.q99
-        # Use the same safe range logic as in _normalize_quantile for consistency
-        range_safe = np.where(q99 - q01 < 1e-4, 1.0, q99 - q01)
         if (dim := q01.shape[-1]) < x.shape[-1]:
-            return np.concatenate([(x[..., :dim] + 1.0) / 2.0 * range_safe + q01, x[..., dim:]], axis=-1)
-        return (x + 1.0) / 2.0 * range_safe + q01
+            return np.concatenate([(x[..., :dim] + 1.0) / 2.0 * (q99 - q01 + 1e-6) + q01, x[..., dim:]], axis=-1)
+        return (x + 1.0) / 2.0 * (q99 - q01 + 1e-6) + q01
+        # # Use the same safe range logic as in _normalize_quantile for consistency
+        # range_safe = np.where(q99 - q01 < 1e-4, 1.0, q99 - q01)
+        # if (dim := q01.shape[-1]) < x.shape[-1]:
+        #     return np.concatenate([(x[..., :dim] + 1.0) / 2.0 * range_safe + q01, x[..., dim:]], axis=-1)
+        # return (x + 1.0) / 2.0 * range_safe + q01
 
 
 @dataclasses.dataclass(frozen=True)
